@@ -1,0 +1,135 @@
+#include <SDL2/SDL.h>
+#include <iostream>
+
+// Screen dimensions
+const int SCREEN_WIDTH = 800;
+const int SCREEN_HEIGHT = 600;
+
+// Player settings
+const int PLAYER_WIDTH = 50;
+const int PLAYER_HEIGHT = 50;
+const float GRAVITY = 0.8f;
+const float JUMP_POWER = -15.0f;
+const float MOVE_SPEED = 5.0f;
+
+struct Platform {
+    int x, y, width, height;
+};
+
+bool checkCollision(const SDL_Rect& a, const SDL_Rect& b) {
+    return SDL_HasIntersection(&a, &b);
+}
+
+int main(int argc, char* argv[]) {
+    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+        std::cerr << "Failed to initialize SDL: " << SDL_GetError() << "\n";
+        return -1;
+    }
+
+    SDL_Window* window = SDL_CreateWindow("Mario Gravity Simulation", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+    if (!window) {
+        std::cerr << "Failed to create window: " << SDL_GetError() << "\n";
+        SDL_Quit();
+        return -1;
+    }
+
+    SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    if (!renderer) {
+        std::cerr << "Failed to create renderer: " << SDL_GetError() << "\n";
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return -1;
+    }
+
+    bool running = true;
+    SDL_Event event;
+
+    // Player variables
+    float playerX = SCREEN_WIDTH / 2.0f;
+    float playerY = SCREEN_HEIGHT - PLAYER_HEIGHT;
+    float playerVelY = 0.0f;
+    bool onGround = true;
+
+    // Platforms
+    Platform platforms[] = {
+        {200, 500, 200, 20},
+        {400, 400, 300, 20},
+        {150, 300, 250, 20},
+    };
+    const int platformCount = sizeof(platforms) / sizeof(Platform);
+
+    // Main game loop
+    while (running) {
+        while (SDL_PollEvent(&event)) {
+            if (event.type == SDL_QUIT) {
+                running = false;
+            }
+        }
+
+        // Handle input
+        const Uint8* keyState = SDL_GetKeyboardState(NULL);
+        if (keyState[SDL_SCANCODE_LEFT]) {
+            playerX -= MOVE_SPEED;
+        }
+        if (keyState[SDL_SCANCODE_RIGHT]) {
+            playerX += MOVE_SPEED;
+        }
+        if (keyState[SDL_SCANCODE_SPACE] && onGround) {
+            playerVelY = JUMP_POWER;
+            onGround = false;
+        }
+
+        // Apply gravity
+        playerVelY += GRAVITY;
+        playerY += playerVelY;
+
+        // Check for collisions with platforms
+        SDL_Rect playerRect = {static_cast<int>(playerX), static_cast<int>(playerY), PLAYER_WIDTH, PLAYER_HEIGHT};
+        onGround = false;
+        for (int i = 0; i < platformCount; ++i) {
+            SDL_Rect platformRect = {platforms[i].x, platforms[i].y, platforms[i].width, platforms[i].height};
+            if (checkCollision(playerRect, platformRect) && playerVelY > 0) {
+                playerY = platforms[i].y - PLAYER_HEIGHT;
+                playerVelY = 0;
+                onGround = true;
+                break;
+            }
+        }
+
+        // Prevent falling through the ground
+        if (playerY + PLAYER_HEIGHT >= SCREEN_HEIGHT) {
+            playerY = SCREEN_HEIGHT - PLAYER_HEIGHT;
+            playerVelY = 0;
+            onGround = true;
+        }
+
+        // Clear screen
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_RenderClear(renderer);
+
+        // Draw player
+        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+        SDL_Rect playerRectDraw = {static_cast<int>(playerX), static_cast<int>(playerY), PLAYER_WIDTH, PLAYER_HEIGHT};
+        SDL_RenderFillRect(renderer, &playerRectDraw);
+
+        // Draw platforms
+        SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255);
+        for (int i = 0; i < platformCount; ++i) {
+            SDL_Rect platformRect = {platforms[i].x, platforms[i].y, platforms[i].width, platforms[i].height};
+            SDL_RenderFillRect(renderer, &platformRect);
+        }
+
+        // Update screen
+        SDL_RenderPresent(renderer);
+
+        // Delay to control frame rate
+        SDL_Delay(16);
+    }
+
+    // Clean up
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+
+    return 0;
+}
